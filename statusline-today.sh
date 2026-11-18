@@ -1,6 +1,8 @@
 #!/bin/sh
 # cc-usage-lite, "today" variant: statusline.sh plus "today $X",
-# the sum of cost.total_cost_usd across every Claude Code session on this machine today.
+# an estimate from observed session-cost increments assigned to the local day.
+# First observation is a baseline, not counted spend. Midnight is approximate:
+# the next day gets the entire delta since yesterday's last observation.
 # No transcript scanning. Each run records its own session in
 #   $DIR/<YYYY-MM-DD>/<session_id>  ->  "base last carry"
 # and today = sum(carry + last - base) over today's files.
@@ -53,7 +55,7 @@ if [ "$sid" != "-" ]; then
   f=$D/$sid
   if ! { [ -f "$f" ] && read -r base last carry < "$f"; }; then
     base=$cost carry=0
-    # Session seen yesterday: start from yesterday's last value so spend after that counts today.
+    # Assign the delta since yesterday's last observation to today (not an exact midnight split).
     y=$DIR/${yday:-$(date -v-1d +%F 2>/dev/null || date -d yesterday +%F)}/$sid
     [ -f "$y" ] && read -r _ base _ < "$y"
     last=$base

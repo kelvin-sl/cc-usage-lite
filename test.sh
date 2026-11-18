@@ -22,7 +22,7 @@ echo "== statusline-today.sh"
 mkdir -p "$T/bin"
 cat > "$T/bin/date" <<'EOS'
 #!/bin/sh
-case "$*" in *-v-1d*|*yesterday*) echo "$FAKE_YDAY" ;; *) echo "$FAKE_DAY" ;; esac
+case "$*" in *-v-1d*|*yesterday*) echo "$FAKE_YDAY" ;; *%Y%m%d*) echo "$FAKE_DAY" | tr -d '-' ;; *) echo "$FAKE_DAY" ;; esac
 EOS
 chmod +x "$T/bin/date"
 export PATH="$T/bin:$PATH" CLAUDE_COST_DIR="$T/cache"
@@ -45,7 +45,7 @@ fresh; export FAKE_DAY=2026-11-17 FAKE_YDAY=2026-11-16
 today mmm 0 >/dev/null
 check "day 1: session reaches 7.00" 7.00 "$(today mmm 7)"
 export FAKE_DAY=2026-11-18 FAKE_YDAY=2026-11-17
-check "day 2: 7.40 counts only the 0.40 after midnight" 0.40 "$(today mmm 7.4)"
+check "day 2: assigns the 0.40 since yesterday's last observation to today" 0.40 "$(today mmm 7.4)"
 check "day 2: 9.00" 2.00 "$(today mmm 9)"
 
 mkdir -p "$CLAUDE_COST_DIR/2026-11-10" && echo "0 5 0" > "$CLAUDE_COST_DIR/2026-11-10/old"
@@ -69,6 +69,40 @@ i=1; while [ $i -le 6 ]; do
 done; wait
 check "6 windows x 20 updates at once: total 6 x 19" 114.00 "$(today win1 20)"
 check "no leftover temp files" 0 "$(ls "$CLAUDE_COST_DIR/2026-11-18" | grep -c tmp)"
+
+echo "== compare-with-ccusage.sh"
+# Only replace the external CLI: exercise our real command/error/JSON handling.
+cat > "$T/bin/ccusage" <<'EOS'
+#!/bin/sh
+printf '%s\n' "$*" > "$CC_ARGS"
+printf '%s' "$CC_JSON"
+exit "$CC_EXIT"
+EOS
+chmod +x "$T/bin/ccusage"
+export CC_ARGS="$T/cc-args" CC_EXIT=0 CC_JSON='{"daily":[{"totalCost":4},{"totalCost":1.5}]}'
+fresh
+today aaa 0 >/dev/null; today aaa 2 >/dev/null
+./compare-with-ccusage.sh > "$T/compare.out" 2> "$T/compare.err"
+check "comparison succeeds with valid totals" 0 "$?"
+check "comparison sums all daily rows" 1 "$(grep -c '\$5.50' "$T/compare.out")"
+check "comparison limits both dates to today" 'claude daily --json --since 20261118 --until 20261118' "$(cat "$CC_ARGS")"
+export CC_JSON='{"daily":[]}'
+./compare-with-ccusage.sh > "$T/compare.out" 2> "$T/compare.err"
+check "empty daily array is a valid zero" 0 "$?"
+check "valid zero is printed" 1 "$(grep -c '\$0.00' "$T/compare.out")"
+compare_fails() {
+  ./compare-with-ccusage.sh > "$T/compare.out" 2> "$T/compare.err"
+  check "$1: nonzero exit" 1 "$?"
+  check "$1: no fabricated totals" '' "$(cat "$T/compare.out")"
+  check "$1: diagnostic on stderr" yes "$(test -s "$T/compare.err" && echo yes)"
+}
+export CC_EXIT=7 CC_JSON='{"daily":[]}'
+compare_fails "ccusage failed despite valid JSON"
+export CC_EXIT=0
+for CC_JSON in '' 'not json' '{}' '{"daily":null}' '{"daily":[{}]}' '{"daily":[{"totalCost":"5"}]}' '{"daily":[{"totalCost":-1}]}' '{"daily":[]} {"daily":[]}'; do
+  export CC_JSON
+  compare_fails "invalid response $CC_JSON"
+done
 
 [ $fail = 0 ] && echo "all tests passed"
 exit $fail

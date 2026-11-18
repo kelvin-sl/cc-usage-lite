@@ -5,253 +5,301 @@
 ![jq](https://img.shields.io/badge/jq-%E2%89%A51.6-blue)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-| Platform                  | Shell      | jq tested in CI | Tested in CI |
-| :------------------------ | :--------- | :-------------- | :----------- |
-| `Linux (x86_64)`          | dash, bash | 1.6, 1.8        | ✓            |
-| `macOS (ARM64)`           | bash (sh)  | 1.8             | ✓            |
-| `Windows (Git Bash)`      | bash       | 1.8             | ✓            |
-| `Windows (WSL)`           | dash, bash | -               | -            |
+**A lightweight replacement for `ccusage statusline`. Keep ccusage for your reports.**
 
-- **Write-up**: [Which Claude Code status line uses the least memory?](https://kelvinwang.info/en/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite) ([中文版](https://kelvinwang.info/zh-hant/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite))
-- **Claude Code status line docs**: <https://code.claude.com/docs/en/statusline>
-- **Issues**: <https://github.com/kelvin-sl/cc-usage-lite/issues>
+See your model, context usage, session cost and available rate limits without scanning
+conversation history. One shell script, one `jq` call per refresh. No Node/Bun runtime,
+network requests or background service for the status line.
 
-## Introduction
-
-cc-usage-lite is a Claude Code status line in one short shell script. It reads only the JSON
-Claude Code passes on stdin, so it uses about 2 MB of memory and finishes in milliseconds,
-however large your transcripts are and however many Claude Code windows you keep open.
-
-```
+```text
 Opus 5.5 | ctx 42% | $3.14 | 5h 23% (14:00) | 7d 41% | my-app
 ```
 
-model | context window used | this session's cost | 5-hour limit used (reset time) | 7-day limit used | current directory
+The main script's work does not grow with transcript history. In the
+[reproducible macOS sample](#benchmark), its reported peak RSS was about 2.2 MiB per invocation.
+An optional beta script adds an [observed daily estimate](#optional-observed-daily-estimate).
 
-An optional variant, `statusline-today.sh`, also shows today's spend across every session on
-the machine, still without reading transcripts:
+**Choose your starting point:**
 
+- [Start from zero](#start-from-zero)
+- [Switch from ccusage](#switch-from-ccusage)
+- [Switch from another status line](#switch-from-another-status-line)
+- [Restore your previous setup](#restore-or-uninstall)
+
+## Start from zero
+
+### 1. Check your environment
+
+You need Claude Code, a POSIX shell, `curl` and **jq 1.6+**.
+
+| Environment | Setup | Automated coverage |
+| :---------- | :---- | :----------------- |
+| macOS | Install jq with `brew install jq` | Script tests on macOS |
+| Linux | On Debian/Ubuntu: `sudo apt install jq curl` | Script tests, including jq 1.6 with dash |
+| Windows with Git Bash | Install [Git for Windows](https://gitforwindows.org/) and [jq](https://jqlang.org/download/); run these instructions in **Git Bash** | Script tests in Windows Git Bash |
+| Windows with WSL | Install Claude Code and dependencies **inside the same WSL distribution**, then follow Linux steps | No dedicated WSL integration test |
+
+On Windows, make sure `jq --version` succeeds inside Git Bash. Reopen the terminal after
+changing PATH. These `.sh` files are not native PowerShell/CMD scripts. Claude Code's
+[Windows status line documentation](https://code.claude.com/docs/en/statusline#windows-configuration)
+explains shell selection and path quoting.
+
+CI checks the scripts; it does **not** launch an interactive Claude Code session on each OS.
+The preview and live checks below are still necessary.
+
+### 2. Download and preview
+
+These commands use the default `~/.claude` directory. If you use a custom `CLAUDE_CONFIG_DIR`,
+use that directory for both the script and settings, and adjust the command accordingly.
+
+```sh
+mkdir -p "$HOME/.claude"
+curl -fsSL https://raw.githubusercontent.com/kelvin-sl/cc-usage-lite/main/statusline.sh -o "$HOME/.claude/cc-usage-lite.sh"
+chmod +x "$HOME/.claude/cc-usage-lite.sh"
+printf '%s
+' '{"model":{"display_name":"Preview"},"context_window":{"used_percentage":42},"cost":{"total_cost_usd":3.14},"workspace":{"current_dir":"/projects/my-app"}}' | sh "$HOME/.claude/cc-usage-lite.sh"
 ```
+
+Expected preview:
+
+```text
+Preview | ctx 42% | $3.14 | my-app
+```
+
+The dedicated filename leaves an existing `statusline.sh` alone. Downloading again updates
+`cc-usage-lite.sh`; save a copy first if you customized that file.
+
+### 3. Configure Claude Code
+
+If `~/.claude/settings.json` does **not** exist, create it with this complete JSON:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "sh \"$HOME/.claude/cc-usage-lite.sh\""
+  }
+}
+```
+
+If it already exists, [back it up](#back-up-settings), then edit only the `statusLine` field.
+Preserve your other settings and keep the file valid JSON. You can check it with:
+
+```sh
+jq empty "$HOME/.claude/settings.json"
+```
+
+Claude Code picks up a changed status line command without a restart. Send a message in a
+trusted project and check the line after the reply. `ctx -` can appear before usage is
+available; rate-limit fields are hidden when Claude Code does not provide them.
+
+If it stays blank, run the preview again and check the configured path, jq availability,
+and any project or managed settings overriding your user configuration.
+
+## Switch from ccusage
+
+You can keep ccusage installed for `ccusage claude daily`, weekly and monthly reports.
+Only replace its status line command.
+
+1. [Back up your settings](#back-up-settings).
+2. Follow [Download and preview](#2-download-and-preview).
+3. Find the existing `statusLine` object in your active settings. Replace its `command`
+   (`npx -y ccusage statusline`, `bun x ccusage statusline`, a wrapper, etc.) with
+   `sh "$HOME/.claude/cc-usage-lite.sh"`, escaped as shown in the JSON above. Keep unrelated
+   settings and optional layout fields such as `padding`.
+4. Send a message and verify the live line. To go back, restore the saved `statusLine` object.
+
+| After switching to the main script | What changes |
+| :-------------------------------- | :----------- |
+| Model, context percentage, session cost | Read directly from Claude Code stdin |
+| 5-hour / 7-day rate-limit percentages | Shown when supplied by Claude Code; these are not ccusage's billing-block estimates |
+| Today's transcript total, block cost, burn rate | Not provided; use ccusage reports or the optional observed estimate |
+| Historical reports and existing transcripts | Remain available to ccusage; no data migration or deletion |
+
+Do not expect the optional `today` number to match ccusage: the two tools observe and price
+different data. See [the estimate's limits](#optional-observed-daily-estimate).
+
+## Switch from another status line
+
+The same process applies to ccstatusline, claude-pace, custom scripts and other tools that
+set Claude Code's `statusLine.command`.
+
+1. [Back up your settings](#back-up-settings), including the complete old `statusLine` object.
+2. Download to the dedicated `cc-usage-lite.sh` filename and run the preview.
+3. Replace only the active `statusLine.command`, using the JSON example above. Leave the old
+   tool's executable, config files, plugins and any unrelated hooks in place.
+4. Check the live output. Git widgets, themes, pace calculations and custom layouts from
+   the old tool are not imported. Restore the old object if you prefer those features.
+
+If a tool regenerates your settings, stop its status-line configuration step from overwriting
+this command. Tools configured through other mechanisms need their own instructions; this
+is a migration of Claude Code's status line setting, not a universal uninstaller.
+
+### Back up settings
+
+In macOS/Linux/WSL or Git Bash, this creates a uniquely named copy and prints its path:
+
+```sh
+backup=$(mktemp "$HOME/.claude/settings.json.before-cc-usage-lite.XXXXXX") &&
+  cp -p "$HOME/.claude/settings.json" "$backup" &&
+  printf 'Settings backup: %s\n' "$backup"
+```
+
+Run this only when the settings file exists. Save the printed path; it also preserves
+any custom status line options you may want to restore later.
+
+### Restore or uninstall
+
+- **Previously used another status line:** copy the `statusLine` object from your saved
+  settings back into the active file. Restore the whole backup only if you have made no
+  other settings changes since taking it.
+- **Started without a status line:** remove just the `statusLine` field from settings.
+- After switching the command away, you may remove `~/.claude/cc-usage-lite.sh`.
+  The optional daily cache can be left in place or removed separately after checking its path;
+  it is not automatically cleaned once the daily script stops running.
+
+## Optional observed daily estimate
+
+`statusline-today.sh` adds this field while keeping the same installation and output format:
+
+```text
 Opus 5.5 | ctx 42% | $3.14 | today $27.80 | 5h 23% (14:00) | 7d 41% | my-app
 ```
 
-## Features
+To select it, replace `main/statusline.sh` in the download URL with
+`main/statusline-today.sh`, keeping the destination `cc-usage-lite.sh`. The settings stay the same.
 
-- **Light**: One `jq` call per refresh. About 2 MB of memory per window, 15 MB for six windows.
-- **Constant cost**: Never reads `~/.claude/projects`, so the cost does not grow with your history.
-- **Offline**: No network calls, no daemons, no background processes.
-- **Today's total (optional)**: `statusline-today.sh` sums every session's cost for the day from a few KB of its own files.
-- **Safe with many windows**: Each window writes only its own file, atomically, so concurrent refreshes cannot corrupt the total.
-- **Tested**: Automated tests on Linux and macOS, plus a script to check the total against ccusage on your own machine.
+**`today` is an estimate from observed cost increments assigned to the local day, not a
+complete daily total or a bill.** On a subscription you pay the plan price. This variant
+remains beta; it has not been reconciled across full days of real use.
 
-## Why cc-usage-lite?
+Each refresh stores `base last carry` for its session in
+`~/.cache/claude-statusline-cost/<date>/<session_id>`. `CLAUDE_COST_DIR` overrides the cache
+root; otherwise `XDG_CACHE_HOME` is respected. The displayed estimate sums
+`carry + last - base` across that day's files.
 
-Claude Code runs your status line command again after every reply, in every open window.
-A status line that scans `~/.claude/projects` to work out today's total cost repeats that scan
-each time. With 11 GB of transcripts and six windows open, `ccusage statusline` held about
-8 GB of memory on a 24 GB Mac.
+- **First observation:** the current cost becomes the baseline. If the first observation
+  is `$1.00`, `today` starts at `$0.00`; a later `$1.50` adds `$0.50`. This can omit the first
+  reply of a new session as well as work done before installation.
+- **Midnight:** yesterday's last observed cost becomes the next day's baseline. The entire
+  delta goes to the new day, even if some work happened before midnight. For example,
+  last observed `$2`, actual midnight cost `$3`, next observed `$4`: the script assigns `$2`
+  to today, although only `$1` was spent after midnight. Stdin snapshots cannot recover the split.
+- **Resumes and counter resets:** an unseen session starts from its first observed cost;
+  a decreasing counter banks the earlier observed increment, then counts from zero.
+- **Coverage:** sessions without status line updates, such as headless CLI or SDK usage,
+  are not counted. Work after the final refresh is missed. A `refreshInterval` can reduce
+  observation gaps, but does not make the midnight split exact.
+- **Pricing:** uses Claude Code's cumulative cost estimate. ccusage can price transcript
+  messages using its own tables, so even fully observed increments may differ.
+- **Multiple windows:** different session IDs write separate files via temporary files and
+  rename. This does not promise serialized updates for two processes sharing one session ID.
+- **Retention and accounts:** keeps today and yesterday; older day directories are cleaned
+  on the first run of a new day. Accounts are combined unless you set separate `CLAUDE_COST_DIR`s.
 
-cc-usage-lite removes the scan.
+### Compare with ccusage
 
-Everything `statusline.sh` shows is already in the JSON Claude Code sends on stdin:
-`cost.total_cost_usd`, `context_window.used_percentage` and, on Pro/Max plans,
-`rate_limits.five_hour` and `rate_limits.seven_day`. The today variant records each session's
-cost as it goes, so the daily total is a sum over a handful of small files instead of a pass
-over every transcript.
-
-## Scripts
-
-| Script                                         | Shows                                     | Writes                                   | Status                                               |
-| :--------------------------------------------- | :---------------------------------------- | :--------------------------------------- | :--------------------------------------------------- |
-| [`statusline.sh`](statusline.sh)               | model, context, session cost, limits, dir | nothing                                  | ![status](https://img.shields.io/badge/stable-green) |
-| [`statusline-today.sh`](statusline-today.sh)   | the above plus today's total              | `~/.cache/claude-statusline-cost/<date>/` | ![status](https://img.shields.io/badge/beta-yellow)  |
-| [`compare-with-ccusage.sh`](compare-with-ccusage.sh) | today's total next to ccusage's     | nothing                                  | ![status](https://img.shields.io/badge/beta-yellow)  |
-| [`test.sh`](test.sh)                           | test results                              | a temporary directory, removed on exit   | ![status](https://img.shields.io/badge/stable-green) |
-
-### Status
-
-- `beta`: Works and passes the automated tests; not yet compared with ccusage over full days of real use.
-- `stable`: Output and behaviour are settled.
-
-### Fields
-
-| Field            | Source on stdin                                                | When it is missing                                   |
-| :--------------- | :------------------------------------------------------------- | :--------------------------------------------------- |
-| Model            | `model.display_name`                                           | `?`                                                  |
-| `ctx 42%`        | `context_window.used_percentage`                               | `ctx -` (for example before the first reply)         |
-| `$3.14`          | `cost.total_cost_usd`, this session only                       | `$0`                                                 |
-| `today $27.80`   | today variant only: sum over today's sessions                  | `today $0.00`                                        |
-| `5h 23% (14:00)` | `rate_limits.five_hour`, reset time in your local time zone    | hidden (API key users, or before the first reply)    |
-| `7d 41%`         | `rate_limits.seven_day`                                        | hidden                                               |
-| Directory        | last part of `workspace.current_dir`                           | empty                                                |
-
-If the input is not valid JSON, the line reads `statusline error`.
-
-## How the today total works
-
-Each time the status line runs, `statusline-today.sh` writes one line for its own session to
-`~/.cache/claude-statusline-cost/<date>/<session_id>` (or `$CLAUDE_COST_DIR`, or under
-`$XDG_CACHE_HOME`): the session cost when first seen today, the latest cost, and anything
-banked before the counter went backwards. Today's total is the sum over today's files.
-
-- **Sessions that cross midnight**: Only the spend after midnight counts toward today.
-- **Resumed sessions**: Cost carried over from before the resume is not counted again. If the counter restarts at 0 instead, the earlier spend is kept.
-- **Several windows at once**: Each window writes only its own file, via a temp file and `mv`, so no locks are needed.
-- **Cleanup**: The first run of each day deletes day directories older than yesterday. A day is a few KB.
-- **Bad input**: A `session_id` outside `[A-Za-z0-9_-]` or a non-numeric cost is shown but not recorded.
-
-What it counts differently from [ccusage](https://github.com/ccusage/ccusage):
-
-- **Price source**: It sums Claude Code's own cost estimate. ccusage prices every message from the transcript with its own price table, so 1M-context, fast mode or tool pricing can differ.
-- **Sessions without a status line**: `claude -p`, the Agent SDK, Claude Desktop and the web app do not run the status line, so they are not counted. ccusage counts any transcript on disk.
-- **History**: It starts counting when you install it and keeps today and yesterday only. Use ccusage for weekly or monthly reports.
-- **Last update**: If a background subagent finishes after your last reply and you close the window before the status line runs again, that spend is not recorded. Setting `refreshInterval` in the status line config reduces this.
-- **Accounts**: Combined. Use a different `CLAUDE_COST_DIR` per account to keep them apart.
-
-> [!WARNING]
->
-> The today total is an estimate of what this machine's interactive sessions spent, not a bill.
-> On a subscription you pay the plan price.
-
-## Comparison with similar tools
-
-### What each tool reads and shows
-
-| Tool                                                        | Reads                                    | Today's total across sessions | Pace vs. reset time | Git status | Layout             |
-| :---------------------------------------------------------- | :--------------------------------------- | :---------------------------- | :------------------ | :--------- | :----------------- |
-| `statusline.sh`                                             | stdin only                               | -                             | -                   | -          | edit the script    |
-| `statusline-today.sh`                                       | stdin + a few KB of its own files        | ✓ from status line runs       | -                   | -          | edit the script    |
-| [claude-pace](https://github.com/Astro-Han/claude-pace)     | stdin + git (cached 5 s)                 | -                             | ✓                   | ✓          | settings           |
-| [ccstatusline](https://github.com/sirmalloc/ccstatusline)   | stdin + the current session's transcript | -                             | -                   | ✓          | interactive editor |
-| [ccusage](https://github.com/ccusage/ccusage) `statusline`  | every transcript on disk                 | ✓ priced per message          | -                   | -          | flags              |
-
-### Memory and speed
-
-Measured on 2026-11-18 on an Apple M4 Pro with 24 GB of memory and 11 GB of transcripts.
-Every tool got the same stdin JSON pointing at a 179 MB transcript; N copies were started at
-once with different session IDs to simulate N windows refreshing together. Figures are the sum
-of each process's peak memory (`/usr/bin/time -l`), default settings. `statusline-today.sh`
-was run with 40 session files already recorded for the day.
-
-| Tool                                                                 | 1 window | 3 windows | 6 windows | Time for 6 windows |
-| :------------------------------------------------------------------- | -------: | --------: | --------: | -----------------: |
-| `statusline.sh`                                                      | 2 MB     | 7 MB      | 15 MB     | about 0.1 s        |
-| `statusline-today.sh`                                                | 3 MB     | 8 MB      | 16 MB     | about 0.1 s        |
-| [claude-pace](https://github.com/Astro-Han/claude-pace)              | 7 MB     | 20 MB     | 41 MB     | about 0.1 s        |
-| [ccstatusline](https://github.com/sirmalloc/ccstatusline) 2.2.34     | 200 MB   | 586 MB    | 1,217 MB  | 0.5 s              |
-| [ccusage](https://github.com/ccusage/ccusage) 20.0.51 `statusline`   | 2,502 MB | 4,015 MB  | 7,995 MB  | 20.5 s             |
-
-ccstatusline's memory follows the size of the current transcript (85 MB with a 444 KB
-transcript). ccusage caches its output, but the cache is invalidated whenever the transcript
-changes, which in an active window is almost every refresh.
-
-### When to use something else
-
-- **Pace**: To know whether you will run out before the reset, use [claude-pace](https://github.com/Astro-Han/claude-pace). It compares usage with elapsed time and shows git status, for a few more MB.
-- **Widgets**: For many widgets, colours and an interactive layout editor, use [ccstatusline](https://github.com/sirmalloc/ccstatusline). Memory grows with long sessions.
-- **Reports**: For exact per-message pricing, history, or weekly and monthly reports, run [ccusage](https://github.com/ccusage/ccusage) by hand (`ccusage claude daily`, `ccusage claude weekly`) instead of putting it in the status line.
-
-## Roadmap
-
-The project stays a single-file status line that reads stdin and nothing else of size.
-Priorities are keeping it small, keeping the today total honest against ccusage, and fixing
-anything that breaks when Claude Code changes its stdin schema.
-
-Colour themes, multi-line layouts, git integration, pace calculations and historical reports
-are out of scope; the tools in [When to use something else](#when-to-use-something-else)
-already do them well.
-
-## Security
-
-- **No network**: Neither script makes network calls.
-- **Writes**: `statusline.sh` writes nothing. `statusline-today.sh` writes only under its cache directory, using file names checked against `[A-Za-z0-9_-]`, so a crafted `session_id` cannot write elsewhere.
-- **Deletes**: Only the day directories it created, older than yesterday, file by file with `rm -f` and `rmdir` (no recursive delete).
-- **Reads**: Only stdin and its own cache files. Transcripts are never opened.
-
-Report a security problem through a [private advisory](https://github.com/kelvin-sl/cc-usage-lite/security/advisories/new) rather than a public issue.
-
-## Versioning and releases
-
-> [!WARNING]
->
-> **cc-usage-lite is young.** Output formats may change between commits, especially in the beta scripts.
-
-`main` is always the release. The install commands below fetch the latest `main`.
-
-## Installation
-
-Requirements: `jq` 1.6 or later (`brew install jq`, `apt install jq`).
-
-Pick one script. `statusline.sh` is the minimal one; `statusline-today.sh` adds today's total.
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/kelvin-sl/cc-usage-lite/main/statusline.sh -o ~/.claude/statusline.sh
-chmod +x ~/.claude/statusline.sh
-```
-
-For the today variant, replace `statusline.sh` with `statusline-today.sh` in the URL and keep the same output path.
-
-Then add this to `~/.claude/settings.json`:
-
-```json
-"statusLine": { "type": "command", "command": "~/.claude/statusline.sh" }
-```
-
-Windows that are already open pick up the new command without a restart.
-
-## Customisation
-
-The output is a list joined by ` | `. Delete a line inside the `[ ... ]` block to drop a field,
-or add one using any field from the [stdin schema](https://code.claude.com/docs/en/statusline), for example:
-
-```jq
-("+" + (.cost.total_lines_added // 0 | tostring) + " -" + (.cost.total_lines_removed // 0 | tostring)),
-```
-
-To colour the whole line, pipe the output through `sed`, for example
-`| sed 's/^/\x1b[97m/;s/$/\x1b[0m/'` for bright white.
-
-## Verification
-
-### Automated tests
-
-```sh
-./test.sh
-```
-
-Runs both scripts on synthetic input in a temporary directory and compares the output.
-[CI](https://github.com/kelvin-sl/cc-usage-lite/actions/workflows/test.yml) runs the same
-command for every push and pull request on Linux (jq 1.8, and jq 1.6 with dash on Ubuntu 22.04),
-macOS and Windows Git Bash.
-
-- **`statusline.sh`**: Subscription input with rate limits, API-key input without them, an empty object, a string where the cost should be a number, and invalid JSON.
-- **Totals**: Several sessions adding up; a resumed session whose earlier cost is not counted again; a session whose counter restarts at 0 without losing earlier spend.
-- **Days**: A session crossing midnight counts only the part after midnight; day directories older than yesterday are removed.
-- **Bad input**: Invalid JSON, empty stdin, a missing `session_id`, a `session_id` containing `../`, a string cost and a tiny float are shown but not recorded.
-- **Concurrency**: Six windows updating 20 times each at the same moment produce the exact total, with no temp files left behind.
-
-### Check against ccusage on your own machine
+From a checkout, with ccusage already installed:
 
 ```sh
 ./compare-with-ccusage.sh
 ```
 
-Prints today's total from the status line next to `ccusage claude daily` for today, and the
-difference. It needs ccusage installed and only reads. Expect the status line total to be lower
-if you installed it partway through the day, or if you also ran `claude -p`, the Agent SDK,
-Desktop or the web app today.
+It prints the observed estimate, ccusage's Claude Code total for the same local date, and
+the difference when ccusage's total is positive. Keep ccusage's reporting timezone aligned
+with your machine if you customize its configuration. The difference is a diagnostic,
+not a correctness score: first observations, missing sessions, midnight assignment and
+pricing can all affect it in either direction.
 
-## Contributing
+A failed command or invalid report produces an error on stderr and exits nonzero, without
+printing fabricated totals. A valid `daily: []` report is treated as zero. The script does
+not modify the status line cache; ccusage may update its own pricing/cache files.
 
-Bug reports and small fixes are welcome. Open an
-[issue](https://github.com/kelvin-sl/cc-usage-lite/issues) with the stdin JSON that produced
-the wrong output (remove anything private), what you expected, and your `jq --version`.
+## Benchmark
 
-> [!NOTE]
->
-> Pull requests should keep `./test.sh` passing and add a test case for the behaviour they change.
-> Features listed as out of scope in the [Roadmap](#roadmap) will be declined.
+Run a reproducible comparison with Python 3.10+, jq and a POSIX shell. Python is needed only
+for this development tool, not for the installed status line. No packages are downloaded.
+
+```sh
+python3 benchmarks/benchmark.py --ccusage --output /tmp/cc-usage-benchmark.json
+```
+
+Omit `--ccusage` to measure only the two local scripts. Choose a fresh output path on each
+run. See [methodology and commands](benchmarks/README.md) for larger datasets and limitations.
+
+Sample from macOS ARM64, 2026-11-18: 32 MiB generated transcripts across 40 sessions,
+3 repetitions, jq 1.7.1-apple, ccusage 20.0.51. Values below are medians, not guarantees.
+[Raw samples, versions, commands and source hashes](benchmarks/results/2026-11-18-macos-arm64.json).
+
+| Tool / cache condition | 1-window batch | 6-window batch | Per-invocation peak RSS, 6-window runs |
+| :--------------------- | -------------: | -------------: | -----------------------------------: |
+| `statusline.sh` | 10 ms | 21 ms | 2.16 MiB |
+| `statusline-today.sh` | 23 ms | 30 ms | 2.31 MiB |
+| ccusage, cache disabled | 162 ms | 333 ms | 78.41 MiB |
+| ccusage, primed with unchanged input | 42 ms | 146 ms | 46.97 MiB |
+
+RSS is the per-invocation value reported by `/usr/bin/time`, **not simultaneous whole-process-tree
+memory and not a sum of six peaks**. Batch time includes process launch and harness overhead.
+The primed condition uses a one-hour cache interval, not ccusage's default; the cache-disabled
+condition measures repeated work. Neither simulates a complete live Claude Code workload.
+The two tools provide different features. Small synthetic workloads do not prove savings
+for every machine or reproduce the earlier 11 GB personal-history experiment.
+
+## Fields and customization
+
+| Field | Source | Missing value |
+| :---- | :----- | :------------ |
+| Model | `model.display_name` | `?` |
+| Context | `context_window.used_percentage` | `ctx -` |
+| Session cost | `cost.total_cost_usd` | `$0` |
+| 5h usage and local reset time | `rate_limits.five_hour` | Hidden |
+| 7d usage | `rate_limits.seven_day` | Hidden |
+| Directory | `workspace.current_dir`, then `cwd` | Empty |
+
+Invalid JSON prints `statusline error`. Remove a field from the script's `[ ... ]` list to
+hide it. Other available values are documented in the
+[Claude Code stdin schema](https://code.claude.com/docs/en/statusline#available-data).
+
+## Scope and alternatives
+
+The project stays small and independent of transcript size. Historical reports, git widgets,
+pace calculations, themes and layout editors are out of scope.
+
+- [ccusage](https://github.com/ccusage/ccusage): historical usage and cost reports.
+- [claude-pace](https://github.com/Astro-Han/claude-pace): pace and reset-time guidance.
+- [ccstatusline](https://github.com/sirmalloc/ccstatusline): configurable widgets and layouts.
+
+Background write-up: [Which Claude Code status line uses the least memory?](https://kelvinwang.info/en/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite)
+([中文版](https://kelvinwang.info/zh-hant/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite)).
+Use the benchmark above for the checked-in, reproducible measurements.
+
+## Verification and contributing
+
+```sh
+./test.sh
+python3 -m unittest discover -s benchmarks -p 'test_*.py'
+```
+
+Tests cover formatting, cost accumulation, first-observation baselines, approximate midnight
+assignment, counter resets, invalid input, retention, concurrent distinct sessions, and
+comparison-command failures. The benchmark validates synthetic message counts against the
+installed ccusage before timing it. CI also runs a small local-script benchmark smoke test.
+
+[Bug reports](https://github.com/kelvin-sl/cc-usage-lite/issues) and small fixes are welcome.
+Include your OS, shell, jq version, expected output and sanitized sample stdin. Add a test
+for changed behavior. If the tool helps your daily workflow, a GitHub star helps others find it.
+
+## Security and updates
+
+The main script reads stdin and writes nothing. The optional daily script reads/writes only
+its cache, validates session filenames, and cleans old date-shaped directories there. Use a
+dedicated cache directory. Neither status line script makes network calls or opens transcripts.
+Report vulnerabilities through a [private advisory](https://github.com/kelvin-sl/cc-usage-lite/security/advisories/new).
+
+Installation currently follows `main`. To pin a reviewed revision, replace `main` in the
+raw download URL with its full commit SHA. Save custom edits before updating; output of the
+beta scripts may evolve. No automatic updater is installed.
 
 ## License
 
-The source code for cc-usage-lite is available under the [MIT License](LICENSE).
+[MIT](LICENSE).
