@@ -13,6 +13,12 @@
 - commit 前檢查 staged diff，只提交本次相關檔案；push 後若觸發 CI，確認結果再回報完成。
 - `main` 是目前安裝命令的來源；更新須維持既有設定與使用方式相容，並同步修改受影響的 README 說明。
 
+## Windows 實機驗收
+
+- Kelvin 提供的 Windows 測試機使用本機 SSH 別名連線：`ssh cc-win`。沿用現有 SSH 設定，不在 repo 保存帳密、私鑰或固定 IP。
+- 驗收前先確認連線、實際 Windows 版本與 Git Bash／jq／Claude Code 環境；連線或驗證失敗須明確回報，不得視為實機測試已通過。
+- 測試安裝、ccusage／其他狀態列遷移與還原時，先備份既有設定；區分 SSH 命令測試、Windows 本機終端顯示與 WSL 測試的結果。
+
 ## 協作署名
 
 - Codex 建立的每個 commit 都必須在訊息末尾加入以下 trailer，與正文隔一個空行：
