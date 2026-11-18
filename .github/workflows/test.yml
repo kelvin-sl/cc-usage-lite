@@ -80,10 +80,17 @@ jobs:
           $d = Join-Path $env:RUNNER_TEMP "claude"
           New-Item -ItemType Directory -Force -Path $d | Out-Null
           '{"model":"opus","permissions":{"allow":["Bash(ls:*)"]},"statusLine":{"type":"command","command":"old"}}' | Set-Content -NoNewline (Join-Path $d "settings.json")
-      - name: Install
-        shell: ${{ matrix.shell }}
+      - name: Install (Windows PowerShell 5.1)
+        if: matrix.shell == 'powershell'
+        shell: powershell
         run: |
-          ${{ matrix.shell }} -ExecutionPolicy Bypass -File .\install.ps1 ${{ matrix.variant }} -ClaudeDir (Join-Path $env:RUNNER_TEMP "claude")
+          powershell -ExecutionPolicy Bypass -File .\install.ps1 ${{ matrix.variant }} -ClaudeDir (Join-Path $env:RUNNER_TEMP "claude")
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Install (PowerShell 7)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File .\install.ps1 ${{ matrix.variant }} -ClaudeDir (Join-Path $env:RUNNER_TEMP "claude")
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Check settings and run the configured command
         shell: pwsh
