@@ -20,9 +20,9 @@ jobs:
         run: ./test.sh
 
   jq-1-6:
-    # Oldest supported jq: Debian bullseye ships jq 1.6 and dash as /bin/sh.
+    # Oldest supported jq: Ubuntu 22.04 ships jq 1.6 and dash as /bin/sh.
     runs-on: ubuntu-latest
-    container: debian:bullseye
+    container: ubuntu:22.04
     steps:
       - uses: actions/checkout@v5
       - name: Install jq
