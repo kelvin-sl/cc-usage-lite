@@ -1,4 +1,6 @@
-# claude-code-statusline-lite
+# cc-usage-lite
+
+> Not affiliated with [ccusage](https://github.com/ccusage/ccusage). The name means "Claude Code usage, lite": the numbers you would put in a status line, without scanning transcripts.
 
 A Claude Code status line in one short shell script. It reads only the JSON Claude Code passes on stdin, so it uses about 2 MB of memory and finishes in milliseconds, no matter how large your transcripts are or how many Claude Code windows you keep open. An optional variant also shows today's spend across every session, still without reading transcripts.
 
@@ -27,7 +29,7 @@ Requirements: `jq` 1.6 or later (`brew install jq`, `apt install jq`).
 Pick one script. `statusline.sh` is the minimal one; `statusline-today.sh` adds today's total.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/kelvin-sl/claude-code-statusline-lite/main/statusline.sh -o ~/.claude/statusline.sh
+curl -fsSL https://raw.githubusercontent.com/kelvin-sl/cc-usage-lite/main/statusline.sh -o ~/.claude/statusline.sh
 chmod +x ~/.claude/statusline.sh
 ```
 
@@ -127,7 +129,7 @@ Measured on 2026-11-18 on an Apple M4 Pro with 24 GB of memory and 11 GB of tran
 
 ccstatusline's memory follows the size of the current transcript (85 MB with a 444 KB transcript). ccusage caches its output, but the cache is invalidated whenever the transcript changes, which in an active window is almost every refresh.
 
-Method, caveats and the full write-up: [Which Claude Code status line uses the least memory?](https://kelvinwang.info/en/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=claude-code-statusline-lite) ([中文版](https://kelvinwang.info/zh-hant/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=claude-code-statusline-lite))
+Method, caveats and the full write-up: [Which Claude Code status line uses the least memory?](https://kelvinwang.info/en/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite) ([中文版](https://kelvinwang.info/zh-hant/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite))
 
 ### When to use something else
 

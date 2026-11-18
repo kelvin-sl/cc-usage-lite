@@ -1,5 +1,5 @@
 #!/bin/sh
-# claude-code-statusline-lite: a Claude Code status line that reads only the JSON
+# cc-usage-lite: a Claude Code status line that reads only the JSON
 # Claude Code passes on stdin. No transcript scanning, no network, no cache files.
 # Shows: model | context % | session cost | 5h / 7d limit % | directory
 # Requires: jq 1.6 or later.

@@ -1,5 +1,5 @@
 #!/bin/sh
-# claude-code-statusline-lite, "today" variant: statusline.sh plus "today $X",
+# cc-usage-lite, "today" variant: statusline.sh plus "today $X",
 # the sum of cost.total_cost_usd across every Claude Code session on this machine today.
 # No transcript scanning. Each run records its own session in
 #   $DIR/<YYYY-MM-DD>/<session_id>  ->  "base last carry"
