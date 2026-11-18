@@ -5,11 +5,12 @@
 ![jq](https://img.shields.io/badge/jq-%E2%89%A51.6-blue)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-| Platform           | Shell      | jq      | Tested in CI |
-| :----------------- | :--------- | :------ | :----------- |
-| `Linux (x86_64)`   | POSIX `sh` | 1.6+    | ✓            |
-| `macOS (ARM64)`    | POSIX `sh` | 1.6+    | ✓            |
-| `Windows`          | WSL or Git Bash | 1.6+ | -          |
+| Platform                  | Shell      | jq tested in CI | Tested in CI |
+| :------------------------ | :--------- | :-------------- | :----------- |
+| `Linux (x86_64)`          | dash, bash | 1.6, 1.8        | ✓            |
+| `macOS (ARM64)`           | bash (sh)  | 1.8             | ✓            |
+| `Windows (Git Bash)`      | bash       | 1.8             | ✓            |
+| `Windows (WSL)`           | dash, bash | -               | -            |
 
 - **Write-up**: [Which Claude Code status line uses the least memory?](https://kelvinwang.info/en/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite) ([中文版](https://kelvinwang.info/zh-hant/blog/claude-code-statusline-memory/?utm_source=github&utm_medium=readme&utm_campaign=cc-usage-lite))
 - **Claude Code status line docs**: <https://code.claude.com/docs/en/statusline>
@@ -220,7 +221,8 @@ To colour the whole line, pipe the output through `sed`, for example
 
 Runs both scripts on synthetic input in a temporary directory and compares the output.
 [CI](https://github.com/kelvin-sl/cc-usage-lite/actions/workflows/test.yml) runs the same
-command on Linux and macOS for every push and pull request.
+command for every push and pull request on Linux (jq 1.8, and jq 1.6 with dash on Ubuntu 22.04),
+macOS and Windows Git Bash.
 
 - **`statusline.sh`**: Subscription input with rate limits, API-key input without them, an empty object, a string where the cost should be a number, and invalid JSON.
 - **Totals**: Several sessions adding up; a resumed session whose earlier cost is not counted again; a session whose counter restarts at 0 without losing earlier spend.
