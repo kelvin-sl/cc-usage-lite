@@ -64,3 +64,40 @@ jobs:
         run: python -m unittest discover -s benchmarks -p 'test_*.py'
       - name: Run isolated benchmark smoke test
         run: python benchmarks/benchmark.py --history-mib 1 --windows 1 2 --sessions 2 --repeats 1 --output benchmark-smoke.json
+
+  windows-installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+        variant: ["", "-Today"]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Existing settings to keep
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP "claude"
+          New-Item -ItemType Directory -Force -Path $d | Out-Null
+          '{"model":"opus","permissions":{"allow":["Bash(ls:*)"]},"statusLine":{"type":"command","command":"old"}}' | Set-Content -NoNewline (Join-Path $d "settings.json")
+      - name: Install
+        shell: ${{ matrix.shell }}
+        run: |
+          ${{ matrix.shell }} -ExecutionPolicy Bypass -File .\install.ps1 ${{ matrix.variant }} -ClaudeDir (Join-Path $env:RUNNER_TEMP "claude")
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Check settings and run the configured command
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP "claude"
+          $s = Get-Content -Raw (Join-Path $d "settings.json") | ConvertFrom-Json
+          if ($s.model -ne "opus") { throw "model setting lost" }
+          if ($s.permissions.allow[0] -ne "Bash(ls:*)") { throw "permissions lost" }
+          if ($s.statusLine.command -eq "old") { throw "statusLine not updated" }
+          if (-not (Get-ChildItem $d -Filter "settings.json.bak-*")) { throw "no backup" }
+          Write-Host "command: $($s.statusLine.command)"
+          # Run it the way Claude Code does on Windows: through Git Bash
+          $env:CLAUDE_COST_DIR = Join-Path $env:RUNNER_TEMP "cost"
+          $json = Get-Content -Raw examples/subscription.json
+          $out = $json | & "C:\Program Files\Git\bin\bash.exe" -c $s.statusLine.command
+          Write-Host "git bash: $out"
+          if ("$out" -notmatch '^Opus 5\.5 \| ctx 42%') { throw "bad output: $out" }

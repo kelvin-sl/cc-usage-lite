@@ -47,6 +47,23 @@ explains shell selection and path quoting.
 CI checks the scripts; it does **not** launch an interactive Claude Code session on each OS.
 The preview and live checks below are still necessary.
 
+#### Windows: one command
+
+On native Windows (Claude Code with Git Bash), download or clone this repository, open
+PowerShell in its folder and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Add `-Today` to install the [observed daily estimate](#optional-observed-daily-estimate) instead.
+The installer finds Git Bash, installs jq if it is missing (winget, or a download into
+`%USERPROFILE%\.claude\bin`), copies the script to `%USERPROFILE%\.claude\statusline.sh`,
+sets `statusLine` in `settings.json` to `bash "C:/Users/<you>/.claude/statusline.sh"` while keeping
+your other settings, backs up both files as `*.bak-<timestamp>`, and runs the command once on
+sample input. Open a new Claude Code window afterwards. CI runs the installer in Windows
+PowerShell and PowerShell 7 and checks that existing settings survive.
+
 ### 2. Download and preview
 
 These commands use the default `~/.claude` directory. If you use a custom `CLAUDE_CONFIG_DIR`,
