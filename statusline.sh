@@ -9,7 +9,7 @@ jq -r '
   [
     (.model.display_name // "?"),
     ("ctx " + (.context_window.used_percentage | pct)),
-    ("$" + ((.cost.total_cost_usd // 0) * 100 | round / 100 | tostring)),
+    ("$" + (((.cost.total_cost_usd | numbers) // 0) * 100 | round / 100 | tostring)),
     (if .rate_limits.five_hour then
        "5h " + (.rate_limits.five_hour.used_percentage | pct) + (.rate_limits.five_hour.resets_at | reset)
      else empty end),
