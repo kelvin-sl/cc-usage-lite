@@ -34,11 +34,6 @@ the machine, still without reading transcripts:
 Opus 5.5 | ctx 42% | $3.14 | today $27.80 | 5h 23% (14:00) | 7d 41% | my-app
 ```
 
-> [!NOTE]
->
-> cc-usage-lite is not affiliated with [ccusage](https://github.com/ccusage/ccusage). The name
-> means "Claude Code usage, lite": the numbers you would put in a status line, without scanning transcripts.
-
 ## Features
 
 - **Light**: One `jq` call per refresh. About 2 MB of memory per window, 15 MB for six windows.
