@@ -262,6 +262,30 @@ condition measures repeated work. Neither simulates a complete live Claude Code 
 The two tools provide different features. Small synthetic workloads do not prove savings
 for every machine or reproduce the earlier 11 GB personal-history experiment.
 
+### Windows comparison with other status lines
+
+Sample from Windows 10, Ryzen 5 5600X, 2026-11-18, every command run through Git Bash 2.56.1:
+256 MiB generated transcripts across 40 sessions, 10 rounds, 150 runs.
+Each cell is the median of 10 runs, with the minimum and maximum in brackets.
+[Script, versions and method](benchmarks/windows/README.md) ·
+[raw data, one row per run](benchmarks/results/2026-11-18-windows-x64.csv).
+
+| Tool | 1 window | 3 windows | 6 windows |
+| :--- | :------- | :-------- | :-------- |
+| `statusline.sh` | 0.11 s [0.11–0.14]<br>27 MB [22–30] | 0.14 s [0.13–0.16]<br>70 MB [60–90] | 0.20 s [0.18–0.22]<br>105 MB [74–125] |
+| `statusline-today.sh` | 0.23 s [0.23–0.24]<br>40 MB [30–42] | 0.28 s [0.26–0.30]<br>100 MB [88–107] | 0.38 s [0.34–0.42]<br>197 MB [171–217] |
+| claude-pace | 0.36 s [0.35–0.38]<br>44 MB [38–50] | 0.39 s [0.37–0.41]<br>111 MB [106–148] | 0.51 s [0.48–0.53]<br>219 MB [176–245] |
+| ccstatusline 2.2.34 | 0.36 s [0.35–0.38]<br>90 MB [88–95] | 0.40 s [0.39–0.41]<br>272 MB [265–279] | 0.55 s [0.52–0.56]<br>510 MB [493–526] |
+| ccusage 20.0.51 | 1.75 s [1.70–1.79]<br>206 MB [199–252] | 2.73 s [2.71–2.83]<br>572 MB [542–601] | 4.45 s [4.41–4.57]<br>1,059 MB [1,012–1,078] |
+
+Time is wall time until all N windows finished. Memory is the highest sampled **sum** of the
+WorkingSet of all processes of that run, sampled every 15 ms; short peaks can be missed. It is
+a different metric from the macOS RSS above, and WorkingSet counts Git Bash's shared DLLs in
+every process. The tools display different fields, so each row is the cost of that tool's own
+output, not of the same work. `today $820.00` in the daily variant comes from 40 seeded cache
+files. ccusage computes its today and block totals from the transcript history; how its
+numbers grow with larger histories was not measured on Windows.
+
 ## Fields and customization
 
 | Field | Source | Missing value |
